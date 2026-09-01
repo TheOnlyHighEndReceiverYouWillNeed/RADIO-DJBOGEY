@@ -159,7 +159,8 @@
         window.addEventListener('resize', resize);
         resize(); requestAnimationFrame(draw);
 
-        88.0: { name: "Omega", file: "audio/estrange.mp3" },                    
+        const stations = {
+            88.0: { name: "Omega", file: "audio/estrange.mp3" },                    
             88.3: { name: "ICI Première / Montréal", file: "https://rcavliveaudio.akamaized.net/hls/live/2006635/P-2QMTL0_MTL/master.m3u8", isLive: true },
             88.5: { name: "Duo Improbable - Trent Reznor & Johnny Cash - Hurt", file: "audio/Hurt.MP3" },
             89.0: { name: "Iota Alpha", file: "audio/always.mp3" },
