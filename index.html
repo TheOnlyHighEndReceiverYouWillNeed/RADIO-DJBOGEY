@@ -18,14 +18,12 @@
             position: relative;
         }
 
-        /* Workshop ambient lighting vignette */
         body::before {
             content: ''; position: fixed; inset: 0;
             background: radial-gradient(circle at center, rgba(40, 20, 8, 0.4) 0%, rgba(5, 3, 2, 0.9) 85%);
             pointer-events: none; z-index: 1;
         }
 
-        /* CRT Scanline & analog broadcast interference overlay */
         .scanlines {
             position: fixed; inset: 0; pointer-events: none; z-index: 10;
             background: linear-gradient(rgba(18, 16, 14, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
@@ -43,7 +41,7 @@
 
         .interactive-volume { position: absolute; top: 24%; left: 5.5%; width: 8%; height: 20%; cursor: pointer; border-radius: 50%; }
         .interactive-tuning { position: absolute; top: 24%; right: 5.5%; width: 8%; height: 20%; cursor: pointer; border-radius: 50%; }
-        .interactive-dial { position: absolute; top: 21.5%; left: 17%; right: 17%; height: 27%; cursor: grab; }
+        .interactive-dial { position: absolute; top: 21.5%; left: 17%; right: 17%; height: 27%; cursor: grab; touch-action: none; }
         .interactive-dial:active { cursor: grabbing; }
         
         .tuning-indicator-bar {
@@ -74,11 +72,11 @@
         <div id="tuningBar" class="tuning-indicator-bar" style="left: 50%;"></div>
         <div class="interactive-dial" id="dialWindow"></div>
         <div class="interactive-tuning" id="tuningTrigger"></div>
-        <div class="screen-display" id="stationDisplay">RECEIVER STATUS: STANDBY... CLICK TO POWER ON</div>
+        <div class="screen-display" id="stationDisplay">RECEIVER STATUS: STANDBY... TAP TO POWER ON</div>
         <div class="visualizer"><canvas id="visualizerCanvas"></canvas></div>
     </div>
 
-    <audio id="mainAudio" preload="auto" crossorigin="anonymous" playsinline></audio>
+    <audio id="mainAudio" preload="auto" playsinline></audio>
     <script>
         const tuningBar = document.getElementById('tuningBar');
         const stationDisplay = document.getElementById('stationDisplay');
@@ -110,18 +108,28 @@
         }
 
         function initAudio() {
-            if (audioCtx) return;
+            if (audioCtx) {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                return;
+            }
             try {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
                 analyser = audioCtx.createAnalyser();
-                analyser.fftSize = 1024; analyser.smoothingTimeConstant = 0.6;
+                analyser.fftSize = 1024; 
+                analyser.smoothingTimeConstant = 0.6;
                 gainNode = audioCtx.createGain();
                 gainNode.gain.setValueAtTime(0.8, audioCtx.currentTime);
+                
                 sourceNode = audioCtx.createMediaElementSource(audioEl);
                 sourceNode.connect(gainNode);
                 gainNode.connect(analyser);
                 analyser.connect(audioCtx.destination);
-            } catch (e) { console.error(e); }
+            } catch (e) { 
+                console.warn("Web Audio context bypassed or restricted on mobile:", e); 
+            }
         }
 
         function draw() {
@@ -160,7 +168,7 @@
         resize(); requestAnimationFrame(draw);
 
         const stations = {
-            88.0: { name: "Omega", file: "audio/estrange.mp3" },                  
+            88.0: { name: "Omega", file: "audio/estrange.mp3" },                    
             88.3: { name: "ICI Première / Montréal", file: "https://rcavliveaudio.akamaized.net/hls/live/2006635/P-2QMTL0_MTL/master.m3u8", isLive: true },
             88.5: { name: "Duo Improbable - Trent Reznor & Johnny Cash - Hurt", file: "audio/Hurt.MP3" },
             89.0: { name: "Iota Alpha", file: "audio/always.mp3" },
@@ -213,26 +221,36 @@
 
         audioEl.addEventListener('error', (e) => {
             const currentSrc = audioEl.currentSrc || "unknown source";
-            stationDisplay.textContent = `[ ERROR ] Failed to load file: ${currentSrc.split('/').pop()}`;
+            stationDisplay.textContent = `[ ERROR ] Stream/File unavailable`;
             console.error("Audio element error:", audioEl.error);
         });
 
         function playSource(url, isLive) {
             if (!isPowerOn) return;
             if (hls) { hls.destroy(); hls = null; }
-            audioEl.pause(); audioEl.src = ""; audioEl.loop = !isLive;
+            audioEl.pause(); 
+            audioEl.removeAttribute('src'); 
+            audioEl.loop = !isLive;
 
             if (isLive && url.endsWith('.m3u8')) {
                 if (Hls.isSupported()) {
-                    hls = new Hls(); hls.loadSource(url); hls.attachMedia(audioEl);
-                    hls.on(Hls.Events.MANIFEST_PARSED, () => audioEl.play().catch(() => {}));
+                    hls = new Hls(); 
+                    hls.loadSource(url); 
+                    hls.attachMedia(audioEl);
+                    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                        audioEl.play().catch(err => console.warn("HLS play blocked:", err));
+                    });
                 } else if (audioEl.canPlayType('application/vnd.apple.mpegurl')) {
-                    audioEl.src = url; audioEl.load(); audioEl.play().catch(() => {});
+                    audioEl.src = url; 
+                    audioEl.load(); 
+                    audioEl.play().catch(err => console.warn("Native HLS play blocked:", err));
                 }
             } else {
-                audioEl.src = url; audioEl.load(); 
+                audioEl.src = url; 
+                audioEl.load(); 
                 audioEl.play().catch((err) => {
-                    console.warn("Playback prevented or failed:", err);
+                    console.warn("Mobile autoplay restriction intercepted:", err);
+                    stationDisplay.textContent = `[ TAP DIAL ] Tap again to initialize audio stream`;
                 });
             }
         }
@@ -263,63 +281,45 @@
             tune(currentTargetFreq, false);
         }
 
-        dialWindow.addEventListener('mousedown', (e) => {
+        dialWindow.addEventListener('pointerdown', (e) => {
             if (!isPowerOn) {
-                isPowerOn = true; initAudio();
-                if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-                tune(88.0, true);
+                isPowerOn = true; 
+                initAudio();
             }
             isDragging = true;
+            dialWindow.setPointerCapture(e.pointerId);
             handleMove(e.clientX);
         });
 
-        window.addEventListener('mousemove', (e) => {
+        dialWindow.addEventListener('pointermove', (e) => {
             if (!isDragging) return;
             handleMove(e.clientX);
         });
 
-        window.addEventListener('mouseup', () => {
+        dialWindow.addEventListener('pointerup', (e) => {
+            if (isDragging) {
+                isDragging = false;
+                try { dialWindow.releasePointerCapture(e.pointerId); } catch(err) {}
+                tune(currentTargetFreq, true);
+            }
+        });
+
+        dialWindow.addEventListener('pointercancel', (e) => {
             if (isDragging) {
                 isDragging = false;
                 tune(currentTargetFreq, true);
             }
         });
 
-        dialWindow.addEventListener('touchstart', (e) => {
+        window.addEventListener('pointerdown', () => {
             if (!isPowerOn) {
-                isPowerOn = true; initAudio();
-                if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                isPowerOn = true; 
+                initAudio();
                 tune(88.0, true);
+            } else {
+                initAudio();
             }
-            isDragging = true;
-            if (e.touches.length > 0) handleMove(e.touches[0].clientX);
-        }, {passive: true});
-
-        window.addEventListener('touchmove', (e) => {
-            if (!isDragging) return;
-            if (e.touches.length > 0) handleMove(e.touches[0].clientX);
-        }, {passive: true});
-
-        window.addEventListener('touchend', () => {
-            if (isDragging) {
-                isDragging = false;
-                tune(currentTargetFreq, true);
-            }
-        });
-
-        window.addEventListener('DOMContentLoaded', () => {
-            const wake = () => {
-                if (!isPowerOn) {
-                    isPowerOn = true; initAudio();
-                    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-                    tune(88.0, true);
-                }
-                window.removeEventListener('click', wake);
-                window.removeEventListener('touchstart', wake);
-            };
-            window.addEventListener('click', wake);
-            window.addEventListener('touchstart', wake);
-        });
+        }, { once: true });
     </script>
 </body>
 </html>
