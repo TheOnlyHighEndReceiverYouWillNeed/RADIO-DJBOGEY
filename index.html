@@ -4,6 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Radio Console</title>
+    
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-7GLPZ5M24E"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-7GLPZ5M24E');
+    </script>
+
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
         :root { --amber-glow: #ffb733; }
@@ -155,7 +166,7 @@
         resize(); requestAnimationFrame(draw);
 
         const stations = {
-            88.0: { name: "Omega", file: "audio/estrange.mp3" },               
+            88.0: { name: "Omega", file: "audio/estrange.mp3" },            
             88.3: { name: "ICI Première / Montréal", file: "https://rcavliveaudio.akamaized.net/hls/live/2006635/P-2QMTL0_MTL/master.m3u8", isLive: true },
             88.5: { name: "Duo Improbable - Trent Reznor & Johnny Cash - Hurt", file: "audio/trent-reznor-johnny-cash-hurt.mp3" },
             88.8: { name: "Echo Delta", file: "audio/arise.mp3" },
