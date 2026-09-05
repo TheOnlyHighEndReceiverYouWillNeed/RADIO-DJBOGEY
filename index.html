@@ -45,11 +45,13 @@
         }
         .screen-display {
             position: absolute; top: 56.5%; left: 27%; right: 27%; height: 8.5%;
-            background: rgba(18, 10, 4, 0.4); border: 1px solid rgba(212, 175, 55, 0.15); border-radius: 4px;
-            display: flex; align-items: center; justify-content: center; font-size: 11px;
+            background: rgba(18, 10, 4, 0.6); border: 1px solid rgba(212, 175, 55, 0.3); border-radius: 4px;
+            display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold;
             color: var(--amber-glow); letter-spacing: 1px; text-shadow: 0 0 8px var(--amber-glow);
-            padding: 0 10px; text-align: center; z-index: 5;
+            padding: 0 10px; text-align: center; z-index: 10; cursor: pointer;
+            transition: background 0.2s ease;
         }
+        .screen-display:hover { background: rgba(40, 20, 8, 0.8); }
         .visualizer { position: absolute; top: 73.5%; left: 5%; right: 5%; height: 12.5%; pointer-events: none; z-index: 4; }
         #visualizerCanvas { display: block; width: 100%; height: 100%; }
     </style>
@@ -60,7 +62,7 @@
         <div id="tuningBar" class="tuning-indicator-bar" style="left: 50%;"></div>
         <div class="interactive-dial" id="dialWindow"></div>
         <div class="interactive-tuning" id="tuningTrigger"></div>
-        <div class="screen-display" id="stationDisplay">RECEIVER STATUS: STANDBY... CLICK TO POWER ON</div>
+        <div class="screen-display" id="stationDisplay">RECEIVER STATUS: STANDBY — TAP HERE TO POWER ON</div>
         <div class="visualizer"><canvas id="visualizerCanvas"></canvas></div>
     </div>
     <audio id="mainAudio" preload="auto" crossorigin="anonymous" playsinline></audio>
@@ -75,96 +77,6 @@
         let audioCtx = null, analyser = null, sourceNode = null, gainNode = null, hls = null;
         let isPowerOn = false, particles = [];
         let currentFreq = 88.0;
-
-        function initParticles(w, h) {
-            particles = Array.from({length: 20}, () => ({
-                x: Math.random() * w, y: Math.random() * h,
-                size: Math.random() * 2 + 0.5, speed: Math.random() * 0.4 + 0.1, opacity: Math.random() * 0.3 + 0.1
-            }));
-        }
-
-        function resize() {
-            if (!canvas || !ctx) return;
-            const rect = canvas.getBoundingClientRect();
-            const dpr = window.devicePixelRatio || 1;
-            canvas.width = rect.width * dpr;
-            canvas.height = rect.height * dpr;
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            initParticles(rect.width, rect.height);
-        }
-
-        function initAudio() {
-            if (audioCtx) {
-                if (audioCtx.state === 'suspended') {
-                    audioCtx.resume();
-                }
-                return;
-            }
-            try {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                if (audioCtx.state === 'suspended') {
-                    audioCtx.resume();
-                }
-                analyser = audioCtx.createAnalyser();
-                analyser.fftSize = 1024; 
-                analyser.smoothingTimeConstant = 0.6;
-                gainNode = audioCtx.createGain();
-                gainNode.gain.setValueAtTime(0.8, audioCtx.currentTime);
-
-                if (!sourceNode) {
-                    sourceNode = audioCtx.createMediaElementSource(audioEl);
-                }
-                
-                try {
-                    sourceNode.connect(gainNode);
-                    gainNode.connect(analyser);
-                    analyser.connect(audioCtx.destination);
-                } catch (corsErr) {
-                    console.warn("CORS routing restriction bypassed:", corsErr);
-                    sourceNode.connect(audioCtx.destination);
-                }
-            } catch (e) { console.error("Audio Context Init Error:", e); }
-        }
-
-        function draw() {
-            requestAnimationFrame(draw);
-            if (!canvas || !ctx) return;
-            const rect = canvas.getBoundingClientRect();
-            const w = rect.width;
-            const h = rect.height;
-            ctx.clearRect(0, 0, w, h);
-
-            particles.forEach(p => {
-                p.x -= p.speed; if (p.x < 0) p.x = w;
-                ctx.fillStyle = `rgba(255, 157, 0, ${p.opacity})`;
-                ctx.fillRect(p.x, p.y, p.size, p.size);
-            });
-
-            const buf = analyser ? analyser.frequencyBinCount : 512;
-            const data = new Uint8Array(buf);
-            if (analyser && isPowerOn && !audioEl.paused && audioEl.readyState >= 2) {
-                try {
-                    analyser.getByteTimeDomainData(data);
-                } catch (e) {
-                    data.fill(128);
-                }
-            } else {
-                data.fill(128);
-            }
-
-            ctx.lineWidth = 1.5;
-            ctx.strokeStyle = (isPowerOn && !audioEl.paused && audioEl.readyState >= 2) ? 'rgba(255, 157, 0, 0.85)' : 'rgba(74, 44, 0, 0.4)';
-            ctx.beginPath();
-            const slice = w / buf;
-            for (let i = 0, x = 0; i < buf; i++, x += slice) {
-                const y = ((data[i] / 128.0) - 1.0) * (h * 1.1) + (h / 2);
-                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-            }
-            ctx.stroke();
-        }
-
-        window.addEventListener('resize', resize);
-        resize(); requestAnimationFrame(draw);
 
         const stations = {
             88.0: { name: "Iota Delta", file: "audio/metallica-ballerina.mp3" },
@@ -225,6 +137,87 @@
             108.0: { name: "ICI Première / Ottawa", file: "https://rcavliveaudio.akamaized.net/hls/live/2006986/M-7OOTT0_OTT/master.m3u8", isLive: true }
         };
 
+        function initParticles(w, h) {
+            particles = Array.from({length: 20}, () => ({
+                x: Math.random() * w, y: Math.random() * h,
+                size: Math.random() * 2 + 0.5, speed: Math.random() * 0.4 + 0.1, opacity: Math.random() * 0.3 + 0.1
+            }));
+        }
+
+        function resize() {
+            if (!canvas || !ctx) return;
+            const rect = canvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            initParticles(rect.width, rect.height);
+        }
+
+        function initAudio() {
+            if (!audioCtx) {
+                try {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    analyser = audioCtx.createAnalyser();
+                    analyser.fftSize = 1024; 
+                    analyser.smoothingTimeConstant = 0.6;
+                    gainNode = audioCtx.createGain();
+                    gainNode.gain.setValueAtTime(0.8, audioCtx.currentTime);
+
+                    if (!sourceNode) {
+                        sourceNode = audioCtx.createMediaElementSource(audioEl);
+                    }
+                    
+                    try {
+                        sourceNode.connect(gainNode);
+                        gainNode.connect(analyser);
+                        analyser.connect(audioCtx.destination);
+                    } catch (corsErr) {
+                        sourceNode.connect(audioCtx.destination);
+                    }
+                } catch (e) { console.error("Audio Context Init Error:", e); }
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function draw() {
+            requestAnimationFrame(draw);
+            if (!canvas || !ctx) return;
+            const rect = canvas.getBoundingClientRect();
+            const w = rect.width;
+            const h = rect.height;
+            ctx.clearRect(0, 0, w, h);
+
+            particles.forEach(p => {
+                p.x -= p.speed; if (p.x < 0) p.x = w;
+                ctx.fillStyle = `rgba(255, 157, 0, ${p.opacity})`;
+                ctx.fillRect(p.x, p.y, p.size, p.size);
+            });
+
+            const buf = analyser ? analyser.frequencyBinCount : 512;
+            const data = new Uint8Array(buf);
+            if (analyser && isPowerOn && !audioEl.paused && audioEl.readyState >= 2) {
+                try { analyser.getByteTimeDomainData(data); } catch (e) { data.fill(128); }
+            } else {
+                data.fill(128);
+            }
+
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = (isPowerOn && !audioEl.paused && audioEl.readyState >= 2) ? 'rgba(255, 157, 0, 0.85)' : 'rgba(74, 44, 0, 0.4)';
+            ctx.beginPath();
+            const slice = w / buf;
+            for (let i = 0, x = 0; i < buf; i++, x += slice) {
+                const y = ((data[i] / 128.0) - 1.0) * (h * 1.1) + (h / 2);
+                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+
+        window.addEventListener('resize', resize);
+        resize(); requestAnimationFrame(draw);
+
         function playSource(url, isLive) {
             if (!isPowerOn) return;
             if (hls) { hls.destroy(); hls = null; }
@@ -232,31 +225,27 @@
             audioEl.src = ""; 
             audioEl.loop = !isLive;
 
-            const executePlay = () => {
-                if (isLive && url.endsWith('.m3u8')) {
-                    if (Hls.isSupported()) {
-                        hls = new Hls(); 
-                        hls.loadSource(url); 
-                        hls.attachMedia(audioEl);
-                        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                            audioEl.play().catch(err => console.warn("HLS Play block intercepted:", err));
-                        });
-                    } else if (audioEl.canPlayType('application/vnd.apple.mpegurl')) {
-                        audioEl.src = url; 
-                        audioEl.load(); 
-                        audioEl.play().catch(err => console.warn("Native HLS Play block intercepted:", err));
-                    }
-                } else {
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            if (isLive && url.endsWith('.m3u8')) {
+                if (Hls.isSupported()) {
+                    hls = new Hls(); 
+                    hls.loadSource(url); 
+                    hls.attachMedia(audioEl);
+                    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                        audioEl.play().catch(err => console.warn("HLS Play block:", err));
+                    });
+                } else if (audioEl.canPlayType('application/vnd.apple.mpegurl')) {
                     audioEl.src = url; 
                     audioEl.load(); 
-                    audioEl.play().catch(err => console.warn("MP3 Play block intercepted:", err));
+                    audioEl.play().catch(err => console.warn("Native HLS Play block:", err));
                 }
-            };
-
-            if (audioCtx && audioCtx.state === 'suspended') {
-                audioCtx.resume().then(executePlay);
             } else {
-                executePlay();
+                audioEl.src = url; 
+                audioEl.load(); 
+                audioEl.play().catch(err => console.warn("MP3 Play block:", err));
             }
         }
 
@@ -285,7 +274,28 @@
             }
         }
 
-        // Pointer event dragging for smooth slide tuning (mouse and touch support)
+        function powerOnReceiver() {
+            if (isPowerOn) return;
+            initAudio();
+            isPowerOn = true;
+            
+            // Synchronously assign source and fire play immediately within the touch event stack
+            const s = stations[88.0];
+            audioEl.src = s.file;
+            audioEl.play().then(() => {
+                tune(currentFreq);
+            }).catch(err => {
+                console.warn("Power prime action intercepted:", err);
+                tune(currentFreq);
+            });
+        }
+
+        stationDisplay.addEventListener('click', () => {
+            if (!isPowerOn) {
+                powerOnReceiver();
+            }
+        });
+
         let isDragging = false;
 
         function updateFromPointer(e) {
@@ -295,11 +305,8 @@
         }
 
         dialWindow.addEventListener('pointerdown', (e) => {
-            initAudio();
             if (!isPowerOn) {
-                isPowerOn = true;
-                tune(88.0);
-                return;
+                powerOnReceiver();
             }
             isDragging = true;
             dialWindow.setPointerCapture(e.pointerId);
@@ -323,20 +330,6 @@
                 isDragging = false;
                 try { dialWindow.releasePointerCapture(e.pointerId); } catch(err) {}
             }
-        });
-
-        window.addEventListener('DOMContentLoaded', () => {
-            const wake = () => {
-                initAudio();
-                if (!isPowerOn) {
-                    isPowerOn = true;
-                    tune(88.0);
-                }
-                window.removeEventListener('click', wake);
-                window.removeEventListener('touchstart', wake);
-            };
-            window.addEventListener('click', wake);
-            window.addEventListener('touchstart', wake);
         });
     </script>
 </body>
